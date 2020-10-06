@@ -466,7 +466,7 @@ class Flex implements PluginInterface, EventSubscriberInterface
             copy($rootDir.'/.env.dist', $rootDir.'/.env');
         }
 
-        $recipes = $this->fetchRecipes($this->operations);
+        $recipes = $this->fetchRecipes($this->operations, $this->isUpdateEventForced($event));
         $this->operations = [];     // Reset the operation after getting recipes
 
         if (2 === $this->displayThanksReminder) {
@@ -543,7 +543,7 @@ class Flex implements PluginInterface, EventSubscriberInterface
                 case 'install':
                     $this->io->writeError(sprintf('  - Configuring %s', $this->formatOrigin($recipe->getOrigin())));
                     $this->configurator->install($recipe, $this->lock, [
-                        'force' => $event instanceof UpdateEvent && $event->force(),
+                        'force' => $this->isUpdateEventForced($event),
                     ]);
                     $manifest = $recipe->getManifest();
                     if (isset($manifest['post-install-output'])) {
@@ -776,7 +776,7 @@ EOPHP
         );
     }
 
-    public function fetchRecipes(array $operations): array
+    public function fetchRecipes(array $operations, bool $force = false): array
     {
         if (!$this->downloader->isEnabled()) {
             $this->io->writeError('<warning>Symfony recipes are disabled: "symfony/flex" not found in the root composer.json</>');
@@ -817,7 +817,7 @@ EOPHP
 
             if ($operation instanceof InstallOperation && isset($locks[$name])) {
                 $ref = $this->lock->get($name)['recipe']['ref'] ?? null;
-                if ($ref && ($locks[$name]['recipe']['ref'] ?? null) === $ref) {
+                if (!$force && $ref && ($locks[$name]['recipe']['ref'] ?? null) === $ref) {
                     continue;
                 }
                 $this->lock->set($name, $locks[$name]);
@@ -1001,5 +1001,10 @@ EOPHP
         }
 
         return $events;
+    }
+
+    private function isUpdateEventForced(?Event $event): bool
+    {
+        return $event instanceof UpdateEvent && $event->force();
     }
 }
